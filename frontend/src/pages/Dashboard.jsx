@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
 import Navbar from '../components/Navbar';
-//import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { predictPriority, isDuplicateTask } from '../utils/aiUtils';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function TaskScheduler() {
  const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
@@ -44,6 +45,14 @@ export default function TaskScheduler() {
     const interval = setInterval(updateDateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+  //show the predicted priority dynamically as the user types
+  useEffect(() => {
+  if (newTask.title.trim()) {
+    const suggested = predictPriority(newTask.title);
+    setNewTask(prev => ({ ...prev, priority: suggested }));
+  }
+  }, [newTask.title]);
+
 useEffect(() => {
     if (user) {
       fetch(`http://localhost:8000/tasks/${user.name}`)
@@ -59,6 +68,14 @@ useEffect(() => {
   
   const handleAddTask = async () => {
     if (!newTask.title.trim()) return;
+
+    if (isDuplicateTask(newTask.title, tasks)) {
+        alert("This task seems to be a duplicate.");
+        return;
+    }
+
+    newTask.priority = predictPriority(newTask.title);  // Auto-suggest priority
+
     try {
       const response = await fetch(`http://localhost:8000/tasks/${user.name}`, {
         method: "POST",
@@ -211,6 +228,18 @@ const handleToggleComplete = async (taskId) => {
   } catch (err) {
     alert("Error updating task: " + err.message);
   }
+};
+
+//drag and drop
+const handleDragEnd = (result) => {
+  const { source, destination } = result;
+  if (!destination) return;
+
+  const reordered = Array.from(tasks);
+  const [removed] = reordered.splice(source.index, 1);
+  reordered.splice(destination.index, 0, removed);
+
+  setTasks(reordered);
 };
 
 //drag and drop
@@ -442,8 +471,136 @@ const handleToggleComplete = async (taskId) => {
       </div>
 
       {/* Task List */}
-      <div style={taskListStyle}>
-        {filteredTasks.length === 0 ? (
+<DragDropContext onDragEnd={handleDragEnd}>
+  <Droppable droppableId="taskList">
+    {(provided) => (
+      <div
+        ref={provided.innerRef}{...provided.droppableProps}
+        style={taskListStyle}
+      >
+        {filteredTasks.map((task, index) => (
+          <Draggable key={task.id} draggableId={String(task.id)} index={index}>
+            {(provided, snapshot) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.draggableProps}
+                {...provided.dragHandleProps}
+                style={{
+                  ...taskCardStyle,
+                  borderLeft: `4px solid ${getPriorityColor(task.priority)}`,
+                  backgroundColor: task.completed ? '#f9fafb' : 'white',
+                  opacity: task.completed ? 0.8 : 1,
+                  marginBottom: '12px',
+                  ...provided.draggableProps.style
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{
+                      margin: '0 0 8px 0',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      textDecoration: task.completed ? 'line-through' : 'none',
+                      color: task.completed ? '#6b7280' : '#1f2937'
+                    }}>
+                      {task.title}
+                    </h3>
+                    {task.description && (
+                      <p style={{
+                        margin: '0 0 12px 0',
+                        color: '#6b7280',
+                        textDecoration: task.completed ? 'line-through' : 'none'
+                      }}>
+                        {task.description}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{
+                        backgroundColor: getPriorityColor(task.priority),
+                        color: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {task.priority.toUpperCase()}
+                      </span>
+                      <span style={{
+                        backgroundColor: '#e5e7eb',
+                        color: '#374151',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
+                        {task.category}
+                      </span>
+                      {task.dueDate && (
+                        <span style={{
+                          color: isOverdue(task) ? '#ef4444' : '#6b7280',
+                          fontSize: '14px',
+                          fontWeight: isOverdue(task) ? '600' : 'normal'
+                        }}>
+                          Due: {task.dueDate} {task.dueTime && `at ${task.dueTime}`}
+                          {isOverdue(task) && ' (OVERDUE)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                    <button
+                      onClick={() => handleToggleComplete(task.id)}
+                      style={{
+                        backgroundColor: task.completed ? '#10b981' : '#e5e7eb',
+                        color: task.completed ? 'white' : '#374151',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {task.completed ? '✓ Done' : 'Mark Done'}
+                    </button>
+                    <button
+                      onClick={() => handleEditTask(task)}
+                      style={{
+                        backgroundColor: '#f59e0b',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      style={{
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Draggable>
+        ))}
+
+        {/* ✅ Always show this placeholder */}
+        {provided.placeholder}
+
+        {/* ✅ If no tasks, show this message (but still inside Droppable) */}
+        {filteredTasks.length === 0 && (
           <div style={{
             ...taskCardStyle,
             textAlign: 'center',
@@ -452,122 +609,16 @@ const handleToggleComplete = async (taskId) => {
           }}>
             <p style={{ margin: 0, fontSize: '18px' }}>
               {filter === 'all' ? 'No tasks yet. Create your first task!' :
-               filter === 'completed' ? 'No completed tasks yet.' :
-               'No pending tasks. Great job!'}
+                filter === 'completed' ? 'No completed tasks yet.' :
+                  'No pending tasks. Great job!'}
             </p>
           </div>
-        ) : (
-          filteredTasks.map(task => (
-            <div 
-              key={task.id} 
-              style={{
-                ...taskCardStyle,
-                borderLeft: `4px solid ${getPriorityColor(task.priority)}`,
-                backgroundColor: task.completed ? '#f9fafb' : 'white',
-                opacity: task.completed ? 0.8 : 1
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ 
-                    margin: '0 0 8px 0', 
-                    fontSize: '18px', 
-                    fontWeight: 'bold',
-                    textDecoration: task.completed ? 'line-through' : 'none',
-                    color: task.completed ? '#6b7280' : '#1f2937'
-                  }}>
-                    {task.title}
-                  </h3>
-                  {task.description && (
-                    <p style={{ 
-                      margin: '0 0 12px 0', 
-                      color: '#6b7280',
-                      textDecoration: task.completed ? 'line-through' : 'none'
-                    }}>
-                      {task.description}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{
-                      backgroundColor: getPriorityColor(task.priority),
-                      color: 'white',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}>
-                      {task.priority.toUpperCase()}
-                    </span>
-                    <span style={{
-                      backgroundColor: '#e5e7eb',
-                      color: '#374151',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      fontSize: '12px'
-                    }}>
-                      {task.category}
-                    </span>
-                    {task.dueDate && (
-                      <span style={{
-                        color: isOverdue(task) ? '#ef4444' : '#6b7280',
-                        fontSize: '14px',
-                        fontWeight: isOverdue(task) ? '600' : 'normal'
-                      }}>
-                        Due: {task.dueDate} {task.dueTime && `at ${task.dueTime}`}
-                        {isOverdue(task) && ' (OVERDUE)'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
-                  <button
-                    onClick={() => handleToggleComplete(task.id)}
-                    style={{
-                      backgroundColor: task.completed ? '#10b981' : '#e5e7eb',
-                      color: task.completed ? 'white' : '#374151',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {task.completed ? '✓ Done' : 'Mark Done'}
-                  </button>
-                  <button
-                    onClick={() => handleEditTask(task)}
-                    style={{
-                      backgroundColor: '#f59e0b',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTask(task.id)}
-                    style={{
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
         )}
       </div>
+    )}
+  </Droppable>
+</DragDropContext>
+
 
       {/* Add/Edit Task Modal */}
       {showAddModal && (

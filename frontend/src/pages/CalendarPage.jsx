@@ -14,11 +14,19 @@ const categoryColors = {
   other: '#6b7280'
 };
 
+
+const getLocalDateString = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // Month is 0-indexed
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function CalendarPage() {
   const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-
+  
   useEffect(() => {
     if (user) {
       fetch(`http://localhost:8000/tasks/${user.name}`)
@@ -29,8 +37,9 @@ export default function CalendarPage() {
   }, [user]);
 
   const tasksForDate = tasks.filter(task =>
-    task.due_date === selectedDate.toISOString().split("T")[0]
-  );
+  task.due_date === getLocalDateString(selectedDate)
+);
+
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
@@ -58,37 +67,37 @@ export default function CalendarPage() {
           onChange={setSelectedDate}
           value={selectedDate}
           tileContent={({ date }) => {
-            const dateStr = date.toISOString().split("T")[0];
-            const tileTasks = tasks.filter(task => task.due_date === dateStr);
-            const taskTitles = tileTasks.map(t => t.title).join(", ");
+  const dateStr = getLocalDateString(date);  // ✅ Use local date
+  const tileTasks = tasks.filter(task => task.due_date === dateStr);
+  const taskTitles = tileTasks.map(t => t.title).join(", ");
 
-            return tileTasks.length > 0 ? (
-              <div data-tooltip-id="task-tooltip" data-tooltip-content={taskTitles}>
-                <div style={{
-                  display: 'flex',
-                  gap: '2px',
-                  marginTop: '2px',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexWrap: 'wrap'
-                }}>
-                  {tileTasks.map((task, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        backgroundColor: categoryColors[task.category] || '#9ca3af'
-                      }}
-                    />
-                  ))}
-                </div>
-                <Tooltip id="task-tooltip" place="top" />
+  return tileTasks.length > 0 ? (
+    <div data-tooltip-id="task-tooltip" data-tooltip-content={taskTitles}>
+      <div style={{
+        display: 'flex',
+        gap: '2px',
+        marginTop: '2px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap'
+      }}>
+        {tileTasks.map((task, index) => (
+          <div
+            key={index}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              backgroundColor: categoryColors[task.category] || '#9ca3af'
+            }}
+          />
+        ))}
+      </div>
+      <Tooltip id="task-tooltip" place="top" />
+    </div>
+  ) : null;
+}}
 
-              </div>
-            ) : null;
-          }}
         />
 
         {/* Task List for Selected Date */}

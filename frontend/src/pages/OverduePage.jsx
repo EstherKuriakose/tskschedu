@@ -14,24 +14,40 @@ export default function OverduePage() {
     other: '#6366f1'
   };
 
-  useEffect(() => {
-    if (user) {
-      fetch(`http://localhost:8000/tasks/${user.name}`)
-        .then(res => res.json())
-        .then(data => {
-          const now = new Date();
+useEffect(() => {
+  if (user) {
+    fetch(`http://localhost:8000/tasks/${user.name}`)
+      .then(res => res.json())
+      .then(data => {
+        const now = new Date();
 
-          const overdue = data.filter(task => {
-            if (task.completed) return false;
-            const dueDateTime = new Date(`${task.due_date}T${task.due_time || '23:59'}`);
-            return dueDateTime < now;
-          });
+        const overdue = data.filter(task => {
+          if (task.completed) return false;
 
-          setOverdueTasks(overdue);
-        })
-        .catch(err => console.error("Error fetching tasks:", err));
-    }
-  }, [user]);
+          // SAFELY extract date & time parts
+          const dueDateStr = task.due_date || '';
+          const dueTimeStr = task.due_time || '23:59';  // default if missing
+
+          // Build local datetime object
+          const [year, month, day] = dueDateStr.split('-').map(Number);
+          const [hour, minute] = dueTimeStr.split(':').map(Number);
+
+          // Construct due date in LOCAL TIME
+          const dueDateTime = new Date(year, month - 1, day, hour, minute);
+
+          // Debug
+          console.log(`🧾 Task: ${task.title}, Due: ${dueDateTime}, Now: ${now}`);
+
+          return dueDateTime < now;
+        });
+
+        setOverdueTasks(overdue);
+      })
+      .catch(err => console.error("Error fetching tasks:", err));
+  }
+}, [user]);
+
+
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
