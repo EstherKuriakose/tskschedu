@@ -15,35 +15,57 @@ const Signup = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSignup = () => {
-    const { name, phone, password, confirmPassword } = formData;
+const handleSignup = async () => {
+  const { name, phone, password, confirmPassword } = formData;
 
-    if (!name || !phone || !password || !confirmPassword) {
-      alert("Please fill in all fields");
-      return;
+  if (!name || !phone || !password || !confirmPassword) {
+    alert("Please fill in all fields");
+    return;
+  }
+
+  const phoneRegex = /^[0-9]{10}$/;
+  if (!phoneRegex.test(phone)) {
+    alert("Incorrect phone number. Please enter a 10-digit number.");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    alert("Passwords do not match!");
+    return;
+  }
+
+  try {
+    const response = await fetch("http://localhost:8000/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, phone, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Signup failed");
     }
 
-    const phoneRegex = /^[0-9]{10}$/;
-    if (!phoneRegex.test(phone)) {
-      alert("Incorrect phone number. Please enter a 10-digit number.");
-      return;
-    }
+    alert("Account created successfully! Redirecting to login...");
+     setFormData({
+  name: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+});
 
-    if (password !== confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
-
-    // Save user info (for mock use)
-    localStorage.setItem("user", JSON.stringify({ name, phone, password }));
-    //alert("Account created successfully! Redirecting to login...");
-
-    // Redirect to login page
     navigate("/login");
-  };
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
 
   const goToLogin = () => {
-    navigate("/");
+   
+    navigate("/login");
   };
 
   return (

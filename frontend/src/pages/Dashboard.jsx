@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
 export default function TaskScheduler() {
+ const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -112,17 +113,42 @@ export default function TaskScheduler() {
   };
 
   // Toggle task completion
-  const handleToggleComplete = (taskId) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { 
-            ...task, 
-            completed: !task.completed,
-            completedAt: !task.completed ? new Date().toISOString() : null
-          }
-        : task
-    ));
+const handleToggleComplete = async (taskId) => {
+  const taskToUpdate = tasks.find(task => task.id === taskId);
+  if (!taskToUpdate) return;
+
+  const updatedTask = {
+    ...taskToUpdate,
+    completed: !taskToUpdate.completed,
+    completedAt: !taskToUpdate.completed ? new Date().toISOString() : null
   };
+
+  try {
+    const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        completed: updatedTask.completed,
+        completedAt: updatedTask.completedAt
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Failed to update task");
+    }
+
+    // Update task in local state
+    setTasks(prev => prev.map(task =>
+      task.id === taskId ? updatedTask : task
+    ));
+  } catch (err) {
+    alert("Error updating task: " + err.message);
+  }
+};
+
 
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
@@ -249,10 +275,15 @@ export default function TaskScheduler() {
   };
 
   return (
+    
     <div style={containerStyle}>
       {/* Header */}
       <div style={headerStyle}>
         <div>
+            <h2 style={{ marginBottom: "1rem", color: "#1f2937" }}>
+  Welcome, {user?.name || "User"}!
+</h2>
+
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
             Task Scheduler
           </h1>

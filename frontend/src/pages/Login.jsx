@@ -6,14 +6,35 @@ const Login = () => {
   const [password, setPassword] = useState(""); // new state for password
   const navigate = useNavigate();
 
-  const handleLogin = () => {
-    // For now, just mocking login by saving to localStorage
-    localStorage.setItem("user", username);
-    localStorage.setItem("password", password); // optional (not secure in real apps)
-    navigate("/dashboard");
+  const handleLogin = async () => {
+    if (!username || !password) {
+      alert("Please enter both name and password.");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name:username, password })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Login failed");
+      }
+
+      const data = await response.json();
+      localStorage.setItem("user", JSON.stringify(data.user));
+    
+      navigate("/dashboard");
+    } catch (error) {
+      alert(error.message);
+    }
   };
-  const handleSignupRedirect = () => {
-    navigate("/signup"); // this should match your signup route
+
+  const handleSignup= () => {
+    navigate("/signup");
   };
 
 
@@ -42,7 +63,7 @@ const Login = () => {
       <div style={{ marginTop: "1rem", fontSize: "0.85rem", fontStyle: "italic" }}>
         New user?{" "}
         <span
-          onClick={handleSignupRedirect}
+          onClick={handleSignup}
           style={{ color: "blue", textDecoration: "underline", cursor: "pointer" }}
         >
           Sign Up
