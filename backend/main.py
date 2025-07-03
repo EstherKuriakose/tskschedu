@@ -15,7 +15,7 @@ app = FastAPI()
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000","http://localhost:3001","http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,15 +122,28 @@ def get_tasks(username: str, db: Session = Depends(get_db)):
 
 @app.patch("/tasks/{task_id}")
 def update_task_status(task_id: int, request: TaskUpdate, db: Session = Depends(get_db)):
+    print(f"🛠️ Updating task {task_id} with data: {request.dict(exclude_unset=True)}")
+
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
+        print("❌ Task not found")
         raise HTTPException(status_code=404, detail="Task not found")
 
-    task.completed = request.completed
-    task.completed_at = request.completed_at
+    if request.completed is not None:
+        task.completed = request.completed
+    if request.completed_at is not None:
+        task.completed_at = request.completed_at
+
+    # ✅ Add this block to update other fields if needed
+    update_data = request.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(task, field, value)
+
     db.commit()
     db.refresh(task)
-    return {"message": "Task status updated"}
+    print(f"✅ Task {task_id} updated")
+    return {"message": "Task status updated", "task": serialize_task(task)}
+
 def serialize_task(task):
     return {
         "id": task.id,
@@ -145,4 +158,15 @@ def serialize_task(task):
         "user_id": task.user_id
     }
 
+
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    db.delete(task)
+    db.commit()
+    return {"message": "Task deleted successfully"}
 

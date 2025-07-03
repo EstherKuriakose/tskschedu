@@ -41,32 +41,53 @@ export default function TaskScheduler() {
     const interval = setInterval(updateDateTime, 1000);
     return () => clearInterval(interval);
   }, []);
-
+useEffect(() => {
+    if (user) {
+      fetch(`http://localhost:8000/tasks/${user.name}`)
+        .then(res => res.json())
+        .then(data => setTasks(data))
+        .catch(err => console.error("Error fetching tasks:", err));
+    }
+  }, [user]);
   // Generate unique ID for tasks
-  const generateId = () => Date.now().toString();
+  //const generateId = () => Date.now().toString();
 
   // Add new task
-  const handleAddTask = () => {
+  
+  const handleAddTask = async () => {
     if (!newTask.title.trim()) return;
-
-    const task = {
-      id: generateId(),
-      ...newTask,
-      completed: false,
-      createdAt: new Date().toISOString(),
-      completedAt: null
-    };
-
-    setTasks(prev => [...prev, task]);
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'medium',
-      dueDate: '',
-      dueTime: '',
-      category: 'personal'
-    });
-    setShowAddModal(false);
+    try {
+      const response = await fetch(`http://localhost:8000/tasks/${user.name}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTask.title,
+          description: newTask.description,
+          priority: newTask.priority,
+          due_date: newTask.dueDate,
+          due_time: newTask.dueTime,
+          category: newTask.category
+        })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to add task");
+      }
+      const result = await fetch(`http://localhost:8000/tasks/${user.name}`);
+      const updatedTasks = await result.json();
+      setTasks(updatedTasks);
+      setShowAddModal(false);
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'medium',
+        dueDate: '',
+        dueTime: '',
+        category: 'personal'
+      });
+    } catch (err) {
+      alert("Error adding task: " + err.message);
+    }
   };
 
   // Edit task
@@ -84,14 +105,39 @@ export default function TaskScheduler() {
   };
 
   // Update task
-  const handleUpdateTask = () => {
-    if (!newTask.title.trim()) return;
+const handleUpdateTask = async () => {
+  if (!newTask.title.trim()) return;
 
-    setTasks(prev => prev.map(task => 
-      task.id === editingTask.id 
-        ? { ...task, ...newTask }
-        : task
-    ));
+  try {
+    const response = await fetch(`http://localhost:8000/tasks/${editingTask.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        due_date: newTask.dueDate,
+        due_time: newTask.dueTime,
+        category: newTask.category
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error("❌ Backend returned error:", result);
+      throw new Error(result.detail || "Failed to update task");
+    }
+
+    console.log("✅ Task updated:", result.task);
+
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === editingTask.id ? result.task : task
+      )
+    );
 
     setEditingTask(null);
     setNewTask({
@@ -103,51 +149,62 @@ export default function TaskScheduler() {
       category: 'personal'
     });
     setShowAddModal(false);
-  };
+  } catch (error) {
+    console.error("❌ Error updating task:", error);
+    alert("Error updating task: " + (error.message || "Something went wrong"));
+  }
+};
 
   // Delete task
-  const handleDeleteTask = (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
+   const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    try {
+      const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to delete task");
+      }
       setTasks(prev => prev.filter(task => task.id !== taskId));
+    } catch (err) {
+      alert("Error deleting task: " + err.message);
     }
   };
 
   // Toggle task completion
 const handleToggleComplete = async (taskId) => {
-  const taskToUpdate = tasks.find(task => task.id === taskId);
-  if (!taskToUpdate) return;
-
-  const updatedTask = {
-    ...taskToUpdate,
-    completed: !taskToUpdate.completed,
-    completedAt: !taskToUpdate.completed ? new Date().toISOString() : null
+    const taskToUpdate = tasks.find(task => task.id === taskId);
+    if (!taskToUpdate) return;
+    const updatedTask = {
+      ...taskToUpdate,
+      completed: !taskToUpdate.completed,
+      completed_at: !taskToUpdate.completed ? new Date().toISOString() : null
+    };
+    try {
+      const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completed: updatedTask.completed,
+          completed_at: updatedTask.completed_at
+        })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to update task");
+      }
+        // Update task in local state
+      setTasks(prev => prev.map(task =>
+        task.id === taskId ? updatedTask : task
+      ));
+    } catch (err) {
+      alert("Error updating task: " + err.message);
+    }
   };
 
-  try {
-    const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        completed: updatedTask.completed,
-        completedAt: updatedTask.completedAt
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || "Failed to update task");
-    }
-
-    // Update task in local state
-    setTasks(prev => prev.map(task =>
-      task.id === taskId ? updatedTask : task
-    ));
-  } catch (err) {
-    alert("Error updating task: " + err.message);
-  }
-};
+  
+   
 
 
   // Filter tasks

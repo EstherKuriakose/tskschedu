@@ -30,7 +30,13 @@ class TaskCreate(TaskBase):
     pass
 
 class TaskUpdate(BaseModel):
-    completed: bool
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    due_time: Optional[str] = None
+    category: Optional[str] = None
+    completed: Optional[bool] = None
     completed_at: Optional[datetime] = None
 
 class TaskResponse(TaskBase):
