@@ -18,10 +18,11 @@ export default function LowPriorityPage() {
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem" }}>
+       <Navbar/>
+      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem",color:"darkgreen" }}>
         Low Priority Tasks
       </h1>
-         <Navbar/>
+        
       {tasks.length === 0 ? (
         <p>No low priority tasks found.</p>
       ) : (

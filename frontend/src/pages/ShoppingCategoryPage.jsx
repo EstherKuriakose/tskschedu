@@ -1,7 +1,7 @@
-// src/pages/MediumPriorityPage.js
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
-export default function MediumPriorityPage() {
+
+export default function ShoppingCategoryPage() {
   const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
 
@@ -10,22 +10,22 @@ export default function MediumPriorityPage() {
       fetch(`http://localhost:8000/tasks/${user.name}`)
         .then(res => res.json())
         .then(data => {
-          const mediumTasks = data.filter(task => task.priority === 'medium');
-          setTasks(mediumTasks);
+          const shoppingTasks = data.filter(task => task.category === 'shopping');
+          setTasks(shoppingTasks);
         })
-        .catch(err => console.error("Error fetching medium priority tasks:", err));
+        .catch(err => console.error("Error fetching shopping tasks:", err));
     }
   }, [user]);
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-     
-        <Navbar/>
-         <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem",color: "darkorange" }}>
-        Medium Priority Tasks
+      <Navbar />
+      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem", color: "#16a34a" }}>
+        Shopping Category Tasks
       </h1>
+
       {tasks.length === 0 ? (
-        <p>No medium priority tasks found.</p>
+        <p>No shopping tasks found.</p>
       ) : (
         <ul style={{ padding: 0, listStyle: "none" }}>
           {tasks.map(task => (
@@ -34,11 +34,12 @@ export default function MediumPriorityPage() {
               padding: "1rem",
               borderRadius: "8px",
               marginBottom: "1rem",
-              backgroundColor: "#fffbea"
+              backgroundColor: "#ecfdf5"
             }}>
               <h3 style={{ margin: 0 }}>{task.title}</h3>
               <p>{task.description}</p>
               <p><strong>Due:</strong> {task.due_date} {task.due_time && `at ${task.due_time}`}</p>
+              <p><strong>Priority:</strong> {task.priority}</p>
             </li>
           ))}
         </ul>

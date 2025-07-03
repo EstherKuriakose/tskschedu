@@ -9,7 +9,13 @@ import Signup from "./pages/Signup";
 import HighPriorityPage from "./pages/HighPriorityPage";
 import LowPriorityPage from './pages/LowPriorityPage';
 import MediumPriorityPage from './pages/MediumPriorityPage';
-
+import CalendarPage from './pages/CalendarPage';
+import WorkCategoryPage from './pages/WorkCategoryPage';
+import PersonalCategoryPage from './pages/PersonalCategoryPage';
+import ShoppingCategoryPage from './pages/ShoppingCategoryPage';
+import HealthCategoryPage from './pages/HealthCategoryPage';
+import OverduePage from './pages/OverduePage';
+import OtherCategoryPage from './pages/OtherCategoryPage';
 function App() {
   return (
     <Router>
@@ -21,7 +27,13 @@ function App() {
         <Route path="/high-priority" element={<HighPriorityPage/>} />
         <Route path="/low-priority" element={<LowPriorityPage/>} />
         <Route path="/medium-priority" element={<MediumPriorityPage />} />
-
+        <Route path="/category/work" element={<WorkCategoryPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/category/shopping" element={<ShoppingCategoryPage />} />
+        <Route path="/category/health" element={<HealthCategoryPage />} />
+        <Route path="/category/other" element={<OtherCategoryPage />} />
+        <Route path="/overdue" element={<OverduePage />} />
+        <Route path="/category/personal" element={<PersonalCategoryPage />} />
       </Routes>
     </Router>
   );

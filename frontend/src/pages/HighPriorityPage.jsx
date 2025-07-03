@@ -21,10 +21,11 @@ export default function HighPriorityPage() {
     
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
       
-      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem" }}>
-        High Priority Tasks
-      </h1>
       <Navbar/>
+     <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem", color: "darkred" }}>
+    High Priority Tasks
+    </h1>
+
       {tasks.length === 0 ? (
         <p>No high priority tasks found.</p>
       ) : (
