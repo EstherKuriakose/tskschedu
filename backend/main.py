@@ -4,6 +4,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from database import SessionLocal, engine
 from models import Base, User,Task
+from schemas import TaskCreate, TaskUpdate,SignupRequest,LoginRequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Path
 
@@ -15,7 +16,7 @@ app = FastAPI()
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:3001","http://localhost:3002"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,31 +33,8 @@ def get_db():
     finally:
         db.close()
 
-# -------------------------------
-# Pydantic Schemas
-# -------------------------------
 
-class SignupRequest(BaseModel):
-    name: str
-    phone: str
-    password: str
 
-class LoginRequest(BaseModel):
-    name: str
-    password: str
-class TaskBase(BaseModel):
-    title: str
-    description: str = ""
-    priority: str
-    due_date: str
-    due_time: str
-    category: str
-class TaskCreate(TaskBase):
-    pass
-
-class TaskUpdate(BaseModel):
-    completed: bool
-    completed_at: str | None = None
 # -------------------------------
 # Signup Route
 # -------------------------------
@@ -121,28 +99,20 @@ def get_tasks(username: str, db: Session = Depends(get_db)):
 
 
 @app.patch("/tasks/{task_id}")
-def update_task_status(task_id: int, request: TaskUpdate, db: Session = Depends(get_db)):
-    print(f"🛠️ Updating task {task_id} with data: {request.dict(exclude_unset=True)}")
-
+def update_task(task_id: int, request: TaskUpdate, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
-        print("❌ Task not found")
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if request.completed is not None:
-        task.completed = request.completed
-    if request.completed_at is not None:
-        task.completed_at = request.completed_at
+    update_data = request.dict(exclude_unset=True)  # ✅ Only update what's sent
 
-    # ✅ Add this block to update other fields if needed
-    update_data = request.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(task, field, value)
+    for key, value in update_data.items():
+        setattr(task, key, value)
 
     db.commit()
     db.refresh(task)
-    print(f"✅ Task {task_id} updated")
-    return {"message": "Task status updated", "task": serialize_task(task)}
+
+    return {"message": "Task updated", "task": serialize_task(task)}
 
 def serialize_task(task):
     return {

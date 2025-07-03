@@ -13,6 +13,14 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     phone: str
     password: str
+class SignupRequest(BaseModel):
+    name: str
+    phone: str
+    password: str
+
+class LoginRequest(BaseModel):
+    name: str
+    password: str
 
 # -----------------------------
 # Task-related Schemas
@@ -38,6 +46,7 @@ class TaskUpdate(BaseModel):
     category: Optional[str] = None
     completed: Optional[bool] = None
     completed_at: Optional[datetime] = None
+
 
 class TaskResponse(TaskBase):
     id: int

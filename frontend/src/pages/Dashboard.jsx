@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
+import 'react-circular-progressbar/dist/styles.css';
+import Navbar from '../components/Navbar';
+//import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function TaskScheduler() {
  const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
@@ -93,46 +96,49 @@ useEffect(() => {
   // Edit task
   const handleEditTask = (task) => {
     setEditingTask(task);
-    setNewTask({
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      dueTime: task.dueTime,
-      category: task.category
-    });
+   setNewTask({
+  title: task.title ?? "",
+  description: task.description ?? "",
+  priority: task.priority ?? "medium",
+  dueDate: task.due_date ?? "",  // make sure you're using `due_date`
+  dueTime: task.due_time ?? "",
+  category: task.category ?? "personal"
+});
+
+
     setShowAddModal(true);
   };
 
   // Update task
 const handleUpdateTask = async () => {
   if (!newTask.title.trim()) return;
-
   try {
+    const payload = {
+      title: newTask.title || "",
+      description: newTask.description || "",
+      priority: newTask.priority || "medium",
+      due_date: newTask.dueDate || "",
+      due_time: newTask.dueTime || "",
+      category: newTask.category || "personal"
+    };
+    console.log("🟨 Sending update payload:", payload);
+
     const response = await fetch(`http://localhost:8000/tasks/${editingTask.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        title: newTask.title,
-        description: newTask.description,
-        priority: newTask.priority,
-        due_date: newTask.dueDate,
-        due_time: newTask.dueTime,
-        category: newTask.category
-      }),
+      body: JSON.stringify(payload),
     });
 
-    const result = await response.json();
+    const result = await response.json(); // ✅ READ ONCE!
 
     if (!response.ok) {
-      console.error("❌ Backend returned error:", result);
-      throw new Error(result.detail || "Failed to update task");
+      const errorMessage = result.detail || JSON.stringify(result);
+      throw new Error(errorMessage); // ✅ Send readable error
     }
 
-    console.log("✅ Task updated:", result.task);
-
+    // ✅ Update UI
     setTasks(prev =>
       prev.map(task =>
         task.id === editingTask.id ? result.task : task
@@ -150,10 +156,11 @@ const handleUpdateTask = async () => {
     });
     setShowAddModal(false);
   } catch (error) {
-    console.error("❌ Error updating task:", error);
     alert("Error updating task: " + (error.message || "Something went wrong"));
+    console.error("Update error:", error);
   }
 };
+
 
   // Delete task
    const handleDeleteTask = async (taskId) => {
@@ -177,7 +184,7 @@ const handleToggleComplete = async (taskId) => {
     const taskToUpdate = tasks.find(task => task.id === taskId);
     if (!taskToUpdate) return;
     const updatedTask = {
-      ...taskToUpdate,
+      
       completed: !taskToUpdate.completed,
       completed_at: !taskToUpdate.completed ? new Date().toISOString() : null
     };
@@ -190,21 +197,34 @@ const handleToggleComplete = async (taskId) => {
           completed_at: updatedTask.completed_at
         })
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to update task");
-      }
-        // Update task in local state
-      setTasks(prev => prev.map(task =>
-        task.id === taskId ? updatedTask : task
-      ));
-    } catch (err) {
-      alert("Error updating task: " + err.message);
+      const result = await response.json();
+     if (!response.ok) {
+      const error = result.detail || JSON.stringify(result);
+      throw new Error(error);
     }
-  };
 
-  
-   
+    // ✅ Use updated task from backend
+    setTasks(prev => prev.map(task =>
+      task.id === taskId ? result.task : task
+    ));
+
+  } catch (err) {
+    alert("Error updating task: " + err.message);
+  }
+};
+
+//drag and drop
+ {/*  const handleDragEnd = (result) => {
+  if (!result.destination) return;
+
+  const reorderedTasks = Array.from(tasks);
+  const [removed] = reorderedTasks.splice(result.source.index, 1);
+  reorderedTasks.splice(result.destination.index, 0, removed);
+
+  setTasks(reorderedTasks);
+};
+*/}
+
 
 
   // Filter tasks
@@ -335,6 +355,7 @@ const handleToggleComplete = async (taskId) => {
     
     <div style={containerStyle}>
       {/* Header */}
+      
       <div style={headerStyle}>
         <div>
             <h2 style={{ marginBottom: "1rem", color: "#1f2937" }}>
@@ -357,10 +378,26 @@ const handleToggleComplete = async (taskId) => {
           + Add Task
         </button>
       </div>
-
+      <Navbar/>
       {/* Stats */}
       <div style={statsStyle}>
         <div style={statCardStyle}>
+          <h3 style={{ margin: '0 0 8px 0', color: '#1f2937', fontSize: '18px' }}>
+    Completion Summary
+  </h3>
+  <div style={{ width: 100, height: 100, margin: 'auto' }}>
+    <CircularProgressbar
+      value={completedTasks}
+      maxValue={totalTasks || 1}
+      text={`${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%`}
+      styles={buildStyles({
+        textColor: "#1f2937",
+        pathColor: "#10b981",
+        trailColor: "#e5e7eb",
+        textSize: "18px",
+      })}
+    />
+  </div>
           <h3 style={{ margin: '0 0 8px 0', color: '#1f2937', fontSize: '18px' }}>Total Tasks</h3>
           <p style={{ margin: 0, fontSize: '32px', fontWeight: 'bold', color: '#3b82f6' }}>
             {totalTasks}

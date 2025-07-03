@@ -1,0 +1,46 @@
+import { useEffect, useState } from 'react';
+import Navbar from '../components/Navbar';
+export default function LowPriorityPage() {
+  const user = JSON.parse(localStorage.getItem("user"));
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    if (user) {
+      fetch(`http://localhost:8000/tasks/${user.name}`)
+        .then(res => res.json())
+        .then(data => {
+          const lowTasks = data.filter(task => task.priority === 'low');
+          setTasks(lowTasks);
+        })
+        .catch(err => console.error("Error fetching low priority tasks:", err));
+    }
+  }, [user]);
+
+  return (
+    <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem" }}>
+        Low Priority Tasks
+      </h1>
+         <Navbar/>
+      {tasks.length === 0 ? (
+        <p>No low priority tasks found.</p>
+      ) : (
+        <ul style={{ padding: 0, listStyle: "none" }}>
+          {tasks.map(task => (
+            <li key={task.id} style={{
+              border: "1px solid #ccc",
+              padding: "1rem",
+              borderRadius: "8px",
+              marginBottom: "1rem",
+              backgroundColor: "#f0fdf4" // soft greenish
+            }}>
+              <h3 style={{ margin: 0 }}>{task.title}</h3>
+              <p>{task.description}</p>
+              <p><strong>Due:</strong> {task.due_date} {task.due_time && `at ${task.due_time}`}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
