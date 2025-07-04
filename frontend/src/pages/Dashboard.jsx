@@ -1,17 +1,21 @@
+//ogg
 import { useState, useEffect } from 'react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
 import Navbar from '../components/Navbar';
 import { predictPriority, isDuplicateTask } from '../utils/aiUtils';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import AIAssistantModal from '../components/AIAssistantModal';
+
 export default function TaskScheduler() {
- const user = JSON.parse(localStorage.getItem("user"));
+  const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
-  const [filter, setFilter] = useState('all'); // all, pending, completed
+  const [filter, setFilter] = useState('all');
+  const [showAiModal, setShowAiModal] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -21,80 +25,87 @@ export default function TaskScheduler() {
     category: 'personal'
   });
 
-  // Get current date and time
+  // Load user and tasks
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+//   useEffect(() => {
+//   if (user) {
+//     fetch(`http://localhost:8000/tasks/${user.name}`)
+//       .then(res => res.json())
+//       .then(data => {
+//         console.log("Fetched Tasks:", data);  // Add this line
+//         setTasks(data);
+//       })
+//       .catch(err => console.error("Error fetching tasks:", err));
+//   }
+// }, [user]);
+
+
+  useEffect(() => {
+    if (user) {
+      fetch(`http://localhost:8000/tasks/${user.name}`)
+        .then(res => res.json())
+        .then(data => {
+  console.log("Tasks from backend:", data);
+  data.forEach((task, idx) => {
+    console.log(`Task ${idx}: id=${task.id}, title=${task.title}`);
+  });
+  setTasks(data);
+})
+        .catch(err => console.error("Error fetching tasks:", err));
+    }
+  }, [user]);
+
+  // Current date and time
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
-      const dateOptions = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      };
-      const timeOptions = { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      };
-      
-      setCurrentDate(now.toLocaleDateString('en-US', dateOptions));
-      setCurrentTime(now.toLocaleTimeString('en-US', timeOptions));
+      setCurrentDate(now.toLocaleDateString('en-US', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      }));
+      setCurrentTime(now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', minute: '2-digit', hour12: true 
+      }));
     };
 
     updateDateTime();
     const interval = setInterval(updateDateTime, 1000);
     return () => clearInterval(interval);
   }, []);
-  //show the predicted priority dynamically as the user types
+
+  // Priority prediction
   useEffect(() => {
-  if (newTask.title.trim()) {
-    const suggested = predictPriority(newTask.title);
-    setNewTask(prev => ({ ...prev, priority: suggested }));
-  }
+    if (newTask.title.trim()) {
+      const suggested = predictPriority(newTask.title);
+      setNewTask(prev => ({ ...prev, priority: suggested }));
+    }
   }, [newTask.title]);
 
-useEffect(() => {
-    if (user) {
-      fetch(`http://localhost:8000/tasks/${user.name}`)
-        .then(res => res.json())
-        .then(data => setTasks(data))
-        .catch(err => console.error("Error fetching tasks:", err));
-    }
-  }, [user]);
-  // Generate unique ID for tasks
-  //const generateId = () => Date.now().toString();
-
-  // Add new task
-  
+  // Task operations
   const handleAddTask = async () => {
     if (!newTask.title.trim()) return;
-
     if (isDuplicateTask(newTask.title, tasks)) {
-        alert("This task seems to be a duplicate.");
-        return;
+      alert("This task seems to be a duplicate.");
+      return;
     }
-
-    newTask.priority = predictPriority(newTask.title);  // Auto-suggest priority
 
     try {
       const response = await fetch(`http://localhost:8000/tasks/${user.name}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTask.title,
-          description: newTask.description,
-          priority: newTask.priority,
-          due_date: newTask.dueDate,
-          due_time: newTask.dueTime,
-          category: newTask.category
-        })
+        body: JSON.stringify(newTask)
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to add task");
-      }
-      const result = await fetch(`http://localhost:8000/tasks/${user.name}`);
-      const updatedTasks = await result.json();
+      
+      if (!response.ok) throw new Error("Failed to add task");
+      
+      const updatedTasks = await fetch(`http://localhost:8000/tasks/${user.name}`)
+        .then(res => res.json());
+      
       setTasks(updatedTasks);
       setShowAddModal(false);
       setNewTask({
@@ -110,165 +121,129 @@ useEffect(() => {
     }
   };
 
-  // Edit task
   const handleEditTask = (task) => {
     setEditingTask(task);
-   setNewTask({
-  title: task.title ?? "",
-  description: task.description ?? "",
-  priority: task.priority ?? "medium",
-  dueDate: task.due_date ?? "",  // make sure you're using `due_date`
-  dueTime: task.due_time ?? "",
-  category: task.category ?? "personal"
-});
-
-
+    setNewTask({
+      title: task.title ?? "",
+      description: task.description ?? "",
+      priority: task.priority ?? "medium",
+      dueDate: task.due_date ?? "",
+      dueTime: task.due_time ?? "",
+      category: task.category ?? "personal"
+    });
     setShowAddModal(true);
   };
 
-  // Update task
-const handleUpdateTask = async () => {
-  if (!newTask.title.trim()) return;
-  try {
-    const payload = {
-      title: newTask.title || "",
-      description: newTask.description || "",
-      priority: newTask.priority || "medium",
-      due_date: newTask.dueDate || "",
-      due_time: newTask.dueTime || "",
-      category: newTask.category || "personal"
-    };
-    console.log("🟨 Sending update payload:", payload);
-
-    const response = await fetch(`http://localhost:8000/tasks/${editingTask.id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const result = await response.json(); // ✅ READ ONCE!
-
-    if (!response.ok) {
-      const errorMessage = result.detail || JSON.stringify(result);
-      throw new Error(errorMessage); // ✅ Send readable error
-    }
-
-    // ✅ Update UI
-    setTasks(prev =>
-      prev.map(task =>
-        task.id === editingTask.id ? result.task : task
-      )
-    );
-
-    setEditingTask(null);
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'medium',
-      dueDate: '',
-      dueTime: '',
-      category: 'personal'
-    });
-    setShowAddModal(false);
-  } catch (error) {
-    alert("Error updating task: " + (error.message || "Something went wrong"));
-    console.error("Update error:", error);
-  }
-};
-
-
-  // Delete task
-   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+  const handleUpdateTask = async () => {
+    if (!newTask.title.trim()) return;
+    
     try {
-      const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
-        method: "DELETE"
+      const response = await fetch(`http://localhost:8000/tasks/${editingTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTask)
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to delete task");
-      }
+
+      if (!response.ok) throw new Error("Failed to update task");
+      
+      setTasks(prev => 
+        prev.map(task => 
+          task.id === editingTask.id ? { ...task, ...newTask } : task
+        )
+      );
+      
+      setShowAddModal(false);
+      setEditingTask(null);
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'medium',
+        dueDate: '',
+        dueTime: '',
+        category: 'personal'
+      });
+    } catch (err) {
+      alert("Error updating task: " + err.message);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    
+    try {
+      await fetch(`http://localhost:8000/tasks/${taskId}`, { method: "DELETE" });
       setTasks(prev => prev.filter(task => task.id !== taskId));
     } catch (err) {
       alert("Error deleting task: " + err.message);
     }
   };
 
-  // Toggle task completion
-const handleToggleComplete = async (taskId) => {
+  const handleToggleComplete = async (taskId) => {
     const taskToUpdate = tasks.find(task => task.id === taskId);
     if (!taskToUpdate) return;
+    
     const updatedTask = {
-      
+      ...taskToUpdate,
       completed: !taskToUpdate.completed,
       completed_at: !taskToUpdate.completed ? new Date().toISOString() : null
     };
+
     try {
-      const response = await fetch(`http://localhost:8000/tasks/${taskId}`, {
+      await fetch(`http://localhost:8000/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completed: updatedTask.completed,
-          completed_at: updatedTask.completed_at
-        })
+        body: JSON.stringify(updatedTask)
       });
-      const result = await response.json();
-     if (!response.ok) {
-      const error = result.detail || JSON.stringify(result);
-      throw new Error(error);
+      
+      setTasks(prev => prev.map(task => 
+        task.id === taskId ? updatedTask : task
+      ));
+    } catch (err) {
+      alert("Error updating task: " + err.message);
     }
+  };
 
-    // ✅ Use updated task from backend
-    setTasks(prev => prev.map(task =>
-      task.id === taskId ? result.task : task
-    ));
-
-  } catch (err) {
-    alert("Error updating task: " + err.message);
-  }
-};
-
-//drag and drop
-const handleDragEnd = (result) => {
+  // Drag and drop
+ const handleDragEnd = (result) => {
   const { source, destination } = result;
+
+  // Dropped outside the list
   if (!destination) return;
 
-  const reordered = Array.from(tasks);
-  const [removed] = reordered.splice(source.index, 1);
-  reordered.splice(destination.index, 0, removed);
+  // No movement
+  if (source.index === destination.index && source.droppableId === destination.droppableId) {
+    return;
+  }
 
-  setTasks(reordered);
+  const reorderedTasks = Array.from(sortedFilteredTasks);
+  const [movedTask] = reorderedTasks.splice(source.index, 1);
+  reorderedTasks.splice(destination.index, 0, movedTask);
+
+  // Rebuild the full task list (preserve order of unfiltered items)
+  const reorderedFull = tasks.map(task => {
+    const newTask = reorderedTasks.find(t => t.id === task.id);
+    return newTask ? newTask : task;
+  });
+
+  setTasks(reorderedFull);
 };
 
-//drag and drop
- {/*  const handleDragEnd = (result) => {
-  if (!result.destination) return;
 
-  const reorderedTasks = Array.from(tasks);
-  const [removed] = reorderedTasks.splice(result.source.index, 1);
-  reorderedTasks.splice(result.destination.index, 0, removed);
-
-  setTasks(reorderedTasks);
-};
-*/}
-
-
-
-  // Filter tasks
+  // Filter and sort tasks
   const filteredTasks = tasks.filter(task => {
     if (filter === 'completed') return task.completed;
     if (filter === 'pending') return !task.completed;
     return true;
   });
 
-  // Get task stats
+  const sortedFilteredTasks = [...filteredTasks].sort((a, b) => a.completed - b.completed);
+
+  // Stats
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(task => task.completed).length;
   const pendingTasks = totalTasks - completedTasks;
 
-  // Priority colors
+  // Helper functions
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'high': return '#ef4444';
@@ -278,13 +253,13 @@ const handleDragEnd = (result) => {
     }
   };
 
-  // Check if task is overdue
   const isOverdue = (task) => {
     if (!task.dueDate || task.completed) return false;
     const dueDateTime = new Date(`${task.dueDate} ${task.dueTime || '23:59'}`);
     return dueDateTime < new Date();
   };
 
+  // Styles
   const containerStyle = {
     minHeight: '100vh',
     backgroundColor: '#f8fafc',
@@ -381,16 +356,13 @@ const handleDragEnd = (result) => {
   };
 
   return (
-    
     <div style={containerStyle}>
       {/* Header */}
-      
       <div style={headerStyle}>
         <div>
-            <h2 style={{ marginBottom: "1rem", color: "#1f2937" }}>
-  Welcome, {user?.name || "User"}!
-</h2>
-
+          <h2 style={{ marginBottom: "1rem", color: "#1f2937" }}>
+            Welcome, {user?.name || "User"}!
+          </h2>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
             Task Scheduler
           </h1>
@@ -398,35 +370,61 @@ const handleDragEnd = (result) => {
             {currentDate} • {currentTime}
           </p>
         </div>
-        <button 
-          style={buttonStyle}
-          onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
-          onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
-          onClick={() => setShowAddModal(true)}
-        >
-          + Add Task
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '30px' }}>
+          <button 
+            style={{
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              fontSize: '14px',
+              transition: '0.3s'
+            }}
+            onClick={() => setShowAddModal(true)}
+          >
+            + Add Task
+          </button>
+          <button
+            onClick={() => setShowAiModal(true)}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '30px',
+              cursor: 'pointer'
+            }}
+            title="AI Assistant"
+          >
+            🤖
+          </button>
+        </div>
       </div>
+      
       <Navbar/>
+      
       {/* Stats */}
       <div style={statsStyle}>
         <div style={statCardStyle}>
           <h3 style={{ margin: '0 0 8px 0', color: '#1f2937', fontSize: '18px' }}>
-    Completion Summary
-  </h3>
-  <div style={{ width: 100, height: 100, margin: 'auto' }}>
-    <CircularProgressbar
-      value={completedTasks}
-      maxValue={totalTasks || 1}
-      text={`${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%`}
-      styles={buildStyles({
-        textColor: "#1f2937",
-        pathColor: "#10b981",
-        trailColor: "#e5e7eb",
-        textSize: "18px",
-      })}
-    />
-  </div>
+            Completion Summary
+          </h3>
+          <div style={{ width: 100, height: 100, margin: 'auto' }}>
+            <CircularProgressbar
+              value={completedTasks}
+              maxValue={totalTasks || 1}
+              text={`${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%`}
+              styles={buildStyles({
+                textColor: "#1f2937",
+                pathColor: "#10b981",
+                trailColor: "#e5e7eb",
+                textSize: "18px",
+              })}
+            />
+          </div>
+        </div>
+        <div style={statCardStyle}>
           <h3 style={{ margin: '0 0 8px 0', color: '#1f2937', fontSize: '18px' }}>Total Tasks</h3>
           <p style={{ margin: 0, fontSize: '32px', fontWeight: 'bold', color: '#3b82f6' }}>
             {totalTasks}
@@ -470,155 +468,171 @@ const handleDragEnd = (result) => {
         </p>
       </div>
 
-      {/* Task List */}
-<DragDropContext onDragEnd={handleDragEnd}>
-  <Droppable droppableId="taskList">
-    {(provided) => (
-      <div
-        ref={provided.innerRef}{...provided.droppableProps}
-        style={taskListStyle}
-      >
-        {filteredTasks.map((task, index) => (
-          <Draggable key={task.id} draggableId={String(task.id)} index={index}>
-            {(provided, snapshot) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.draggableProps}
-                {...provided.dragHandleProps}
-                style={{
-                  ...taskCardStyle,
-                  borderLeft: `4px solid ${getPriorityColor(task.priority)}`,
-                  backgroundColor: task.completed ? '#f9fafb' : 'white',
-                  opacity: task.completed ? 0.8 : 1,
-                  marginBottom: '12px',
-                  ...provided.draggableProps.style
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      textDecoration: task.completed ? 'line-through' : 'none',
-                      color: task.completed ? '#6b7280' : '#1f2937'
-                    }}>
-                      {task.title}
-                    </h3>
-                    {task.description && (
-                      <p style={{
-                        margin: '0 0 12px 0',
-                        color: '#6b7280',
-                        textDecoration: task.completed ? 'line-through' : 'none'
-                      }}>
-                        {task.description}
-                      </p>
-                    )}
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{
-                        backgroundColor: getPriorityColor(task.priority),
-                        color: 'white',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}>
-                        {task.priority.toUpperCase()}
-                      </span>
-                      <span style={{
-                        backgroundColor: '#e5e7eb',
-                        color: '#374151',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px'
-                      }}>
-                        {task.category}
-                      </span>
-                      {task.dueDate && (
-                        <span style={{
-                          color: isOverdue(task) ? '#ef4444' : '#6b7280',
-                          fontSize: '14px',
-                          fontWeight: isOverdue(task) ? '600' : 'normal'
-                        }}>
-                          Due: {task.dueDate} {task.dueTime && `at ${task.dueTime}`}
-                          {isOverdue(task) && ' (OVERDUE)'}
-                        </span>
-                      )}
+      {/* Task List with Drag and Drop */}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="taskList" type="TASK">
+          {(provided) => (
+            <div
+              {...provided.droppableProps}
+              ref={provided.innerRef}
+              style={taskListStyle}
+            >
+              {sortedFilteredTasks.map((task, index) => (
+                <Draggable 
+                  key={task.id.toString()} 
+                  draggableId={task.id.toString()} 
+                  index={index}
+                >
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      style={{
+                        ...taskCardStyle,
+                        borderLeft: `4px solid ${getPriorityColor(task.priority)}`,
+                        backgroundColor: task.completed ? '#f9fafb' : 'white',
+                        opacity: task.completed ? 0.8 : 1,
+                        marginBottom: '12px',
+                        transform: snapshot.isDragging ? 'scale(1.02)' : 'none',
+                        boxShadow: snapshot.isDragging 
+                          ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                          : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                        cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                        ...provided.draggableProps.style
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{
+                            margin: '0 0 8px 0',
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            textDecoration: task.completed ? 'line-through' : 'none',
+                            color: task.completed ? '#6b7280' : '#1f2937'
+                          }}>
+                            {task.title}
+                          </h3>
+                          {task.description && (
+                            <p style={{
+                              margin: '0 0 12px 0',
+                              color: '#6b7280',
+                              textDecoration: task.completed ? 'line-through' : 'none'
+                            }}>
+                              {task.description}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{
+                              backgroundColor: getPriorityColor(task.priority),
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '500'
+                            }}>
+                              {task.priority.toUpperCase()}
+                            </span>
+                            <span style={{
+                              backgroundColor: '#e5e7eb',
+                              color: '#374151',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px'
+                            }}>
+                              {task.category}
+                            </span>
+                            {task.dueDate && (
+                              <span style={{
+                                color: isOverdue(task) ? '#ef4444' : '#6b7280',
+                                fontSize: '14px',
+                                fontWeight: isOverdue(task) ? '600' : 'normal'
+                              }}>
+                                Due: {task.dueDate} {task.dueTime && `at ${task.dueTime}`}
+                                {isOverdue(task) && ' (OVERDUE)'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                          <button
+                            onClick={() => handleToggleComplete(task.id)}
+                            style={{
+                              backgroundColor: task.completed ? '#10b981' : '#e5e7eb',
+                              color: task.completed ? 'white' : '#374151',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {task.completed ? '✓ Done' : 'Mark Done'}
+                          </button>
+                          <button
+                            onClick={() => handleEditTask(task)}
+                            style={{
+                              backgroundColor: '#f59e0b',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTask(task.id)}
+                            style={{
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
-                    <button
-                      onClick={() => handleToggleComplete(task.id)}
-                      style={{
-                        backgroundColor: task.completed ? '#10b981' : '#e5e7eb',
-                        color: task.completed ? 'white' : '#374151',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {task.completed ? '✓ Done' : 'Mark Done'}
-                    </button>
-                    <button
-                      onClick={() => handleEditTask(task)}
-                      style={{
-                        backgroundColor: '#f59e0b',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTask(task.id)}
-                      style={{
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Draggable>
-        ))}
+                  )}
+                </Draggable>
+              ))}
+              {sortedFilteredTasks.length === 0 ? (
+  <>
+    {provided.placeholder}
+    <div
+      style={{
+        ...taskCardStyle,
+        textAlign: 'center',
+        padding: '40px',
+        color: '#6b7280'
+      }}
+    >
+      <p style={{ margin: 0, fontSize: '18px' }}>
+        {filter === 'all'
+          ? 'No tasks yet. Create your first task!'
+          : filter === 'completed'
+          ? 'No completed tasks yet.'
+          : 'No pending tasks. Great job!'}
+      </p>
+    </div>
+  </>
+) : (
+  <>
+    {provided.placeholder}
+  </>
+)}
 
-        {/* ✅ Always show this placeholder */}
-        {provided.placeholder}
-
-        {/* ✅ If no tasks, show this message (but still inside Droppable) */}
-        {filteredTasks.length === 0 && (
-          <div style={{
-            ...taskCardStyle,
-            textAlign: 'center',
-            padding: '40px',
-            color: '#6b7280'
-          }}>
-            <p style={{ margin: 0, fontSize: '18px' }}>
-              {filter === 'all' ? 'No tasks yet. Create your first task!' :
-                filter === 'completed' ? 'No completed tasks yet.' :
-                  'No pending tasks. Great job!'}
-            </p>
-          </div>
-        )}
-      </div>
-    )}
-  </Droppable>
-</DragDropContext>
-
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
 
       {/* Add/Edit Task Modal */}
       {showAddModal && (
@@ -796,8 +810,6 @@ const handleDragEnd = (result) => {
                   ...buttonStyle,
                   padding: '10px 20px'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
               >
                 {editingTask ? 'Update Task' : 'Add Task'}
               </button>
@@ -805,6 +817,12 @@ const handleDragEnd = (result) => {
           </div>
         </div>
       )}
+      
+      {/* AI Assistant Modal */}
+      {showAiModal && user && (
+  <AIAssistantModal user={user} onClose={() => setShowAiModal(false)} />
+)}
+
     </div>
   );
 }

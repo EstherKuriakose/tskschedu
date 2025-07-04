@@ -4,15 +4,20 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from database import SessionLocal, engine
 from models import Base, User,Task
-from schemas import TaskCreate, TaskUpdate,SignupRequest,LoginRequest
+from schemas import TaskCreate, TaskUpdate,SignupRequest,LoginRequest,TaskSummary
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Path
+from typing import List
+from dotenv import load_dotenv
+import os
+from transformers import pipeline
 
 # Create the database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
+# Faster, lightweight model (T5-small)
+summarizer = pipeline("summarization", model="t5-small")
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +38,8 @@ def get_db():
     finally:
         db.close()
 
+class TaskSummaryRequest(BaseModel):
+    tasks: list[str]
 
 
 # -------------------------------
@@ -115,18 +122,26 @@ def update_task(task_id: int, request: TaskUpdate, db: Session = Depends(get_db)
     return {"message": "Task updated", "task": serialize_task(task)}
 
 def serialize_task(task):
+    from datetime import datetime, time, date
+
+    def safe_format(value, fmt):
+        if isinstance(value, (datetime, date, time)):
+            return value.strftime(fmt)
+        return value  # If it's already a string or None
+
     return {
         "id": task.id,
         "title": task.title,
         "description": task.description,
         "priority": task.priority,
-        "due_date": task.due_date,
-        "due_time": task.due_time,
+        "due_date": safe_format(task.due_date, "%Y-%m-%d"),
+        "due_time": safe_format(task.due_time, "%H:%M"),
         "category": task.category,
         "completed": task.completed,
         "completed_at": task.completed_at,
         "user_id": task.user_id
     }
+
 
 
 
@@ -140,3 +155,26 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Task deleted successfully"}
 
+
+@app.get("/ai/summary/{username}")
+def get_summary(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.name == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    tasks = db.query(Task).filter(Task.user_id == user.id).all()
+    if not tasks:
+        return {"summary": "No tasks available to summarize."}
+
+    text = " ".join([
+    f"{task.title}: {task.description}" if task.description else task.title
+    for task in tasks
+])
+
+    # Summarize only if text is long enough
+    if len(text) < 20:
+        return {"summary": "Not enough task content to summarize."}
+    if len(text) > 1000:
+        text = text[:1000]
+    result = summarizer(text, max_length=60, min_length=20, do_sample=False)
+    return {"summary": result[0]['summary_text']}

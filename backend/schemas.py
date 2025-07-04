@@ -56,3 +56,12 @@ class TaskResponse(TaskBase):
 
     class Config:
         orm_mode = True  # To support SQLAlchemy model conversion
+
+class TaskSummary(BaseModel):
+    title: str
+    description: str = ""
+    priority: str
+    due_date: str
+    due_time: str = ""
+    category: str
+    completed: bool
